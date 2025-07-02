@@ -66,7 +66,8 @@ public class CouponController {
             request.name(), 
             request.totalCount(), 
             request.startAt(), 
-            request.endAt()
+            request.endAt(),
+            request.maxPerUser() != null ? request.maxPerUser() : 1
         );
         return ResponseEntity.ok(coupon);
     }
@@ -90,12 +91,37 @@ public class CouponController {
     }
     
     /**
+     * 특정 쿠폰 정보 조회 API (실시간 업데이트용)
+     */
+    @GetMapping("/{couponId}")
+    public ResponseEntity<Coupon> getCoupon(@PathVariable Long couponId) {
+        Coupon coupon = couponService.getAllCoupons().stream()
+                .filter(c -> c.getId().equals(couponId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 쿠폰입니다."));
+        return ResponseEntity.ok(coupon);
+    }
+    
+    /**
+     * 사용자별 쿠폰 발급 현황 조회 API
+     */
+    @GetMapping("/{couponId}/user/{userId}/status")
+    public ResponseEntity<CouponService.UserCouponStatus> getUserCouponStatus(
+            @PathVariable Long couponId, 
+            @PathVariable Long userId) {
+        
+        CouponService.UserCouponStatus status = couponService.getUserCouponStatus(couponId, userId);
+        return ResponseEntity.ok(status);
+    }
+    
+    /**
      * 쿠폰 생성 요청 DTO
      */
     public record CouponCreateRequest(
         String name,
         Integer totalCount,
         LocalDateTime startAt,
-        LocalDateTime endAt
+        LocalDateTime endAt,
+        Integer maxPerUser  // 1인당 최대 발급 가능 수량
     ) {}
 } 

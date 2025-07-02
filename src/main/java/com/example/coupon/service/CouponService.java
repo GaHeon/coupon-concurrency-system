@@ -30,16 +30,19 @@ public class CouponService {
     @Transactional
     public CouponIssueResult issueCoupon(Long couponId, Long userId) {
         try {
-            // 1. 중복 발급 확인
-            if (issuedCouponRepository.existsByCouponIdAndUserId(couponId, userId)) {
-                return new CouponIssueResult(false, "이미 발급받은 쿠폰입니다.");
-            }
-            
-            // 2. Pessimistic Lock으로 쿠폰 조회
+            // 1. Pessimistic Lock으로 쿠폰 조회 (먼저 조회해서 maxPerUser 확인)
             Coupon coupon = couponRepository.findByIdWithLock(couponId)
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 쿠폰입니다."));
             
-            // 3. 발급 가능 여부 확인
+            // 2. 사용자별 발급 수량 확인
+            Long userIssuedCount = issuedCouponRepository.countByCouponIdAndUserId(couponId, userId);
+            if (userIssuedCount >= coupon.getMaxPerUser()) {
+                return new CouponIssueResult(false, 
+                    String.format("1인당 최대 %d개까지만 발급 가능합니다. (현재 %d개 발급됨)", 
+                    coupon.getMaxPerUser(), userIssuedCount));
+            }
+            
+            // 3. 쿠폰 발급 기간 및 수량 확인
             if (!coupon.canIssue()) {
                 return new CouponIssueResult(false, "쿠폰 발급 기간이 아니거나 수량이 모두 소진되었습니다.");
             }
@@ -52,7 +55,9 @@ public class CouponService {
             IssuedCoupon issuedCoupon = new IssuedCoupon(coupon, userId);
             issuedCouponRepository.save(issuedCoupon);
             
-            return new CouponIssueResult(true, "쿠폰이 성공적으로 발급되었습니다.");
+            return new CouponIssueResult(true, 
+                String.format("쿠폰이 성공적으로 발급되었습니다! (%d/%d개 발급됨)", 
+                userIssuedCount + 1, coupon.getMaxPerUser()));
             
         } catch (Exception e) {
             return new CouponIssueResult(false, "쿠폰 발급 중 오류가 발생했습니다: " + e.getMessage());
@@ -83,6 +88,15 @@ public class CouponService {
     }
     
     /**
+     * 쿠폰 생성 (maxPerUser 포함)
+     */
+    @Transactional
+    public Coupon createCoupon(String name, Integer totalCount, LocalDateTime startAt, LocalDateTime endAt, Integer maxPerUser) {
+        Coupon coupon = new Coupon(name, totalCount, startAt, endAt, maxPerUser);
+        return couponRepository.save(coupon);
+    }
+    
+    /**
      * 특정 쿠폰의 발급 내역 조회
      */
     public List<IssuedCoupon> getIssuedCoupons(Long couponId) {
@@ -94,6 +108,22 @@ public class CouponService {
      */
     public List<IssuedCoupon> getUserIssuedCoupons(Long userId) {
         return issuedCouponRepository.findByUserId(userId);
+    }
+    
+    /**
+     * 사용자별 쿠폰 발급 현황 조회
+     */
+    public UserCouponStatus getUserCouponStatus(Long couponId, Long userId) {
+        Coupon coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 쿠폰입니다."));
+        
+        Long userIssuedCount = issuedCouponRepository.countByCouponIdAndUserId(couponId, userId);
+        
+        return new UserCouponStatus(
+            userIssuedCount.intValue(),
+            coupon.getMaxPerUser(),
+            userIssuedCount < coupon.getMaxPerUser()
+        );
     }
     
     /**
@@ -110,5 +140,24 @@ public class CouponService {
         
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
+    }
+    
+    /**
+     * 사용자별 쿠폰 발급 현황 클래스
+     */
+    public static class UserCouponStatus {
+        private final int issuedCount;
+        private final int maxPerUser;
+        private final boolean canIssue;
+        
+        public UserCouponStatus(int issuedCount, int maxPerUser, boolean canIssue) {
+            this.issuedCount = issuedCount;
+            this.maxPerUser = maxPerUser;
+            this.canIssue = canIssue;
+        }
+        
+        public int getIssuedCount() { return issuedCount; }
+        public int getMaxPerUser() { return maxPerUser; }
+        public boolean isCanIssue() { return canIssue; }
     }
 } 

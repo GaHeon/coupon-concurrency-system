@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>쿠폰 발급 시스템</title>
+    <!-- Toastr CSS & JS for Toast notifications -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -112,6 +116,15 @@
             font-size: 0.9rem;
         }
         
+        .coupon-limits {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #f8f9ff;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #667eea;
+        }
+        
         .progress-bar {
             margin-top: 0.8rem;
             background: #e1e5e9;
@@ -149,25 +162,7 @@
             transform: none;
         }
         
-        .message {
-            margin-top: 1rem;
-            padding: 1rem;
-            border-radius: 10px;
-            text-align: center;
-            display: none;
-        }
-        
-        .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
+
         
         .admin-link {
             text-align: center;
@@ -208,8 +203,6 @@
             쿠폰 발급받기
         </button>
         
-        <div class="message" id="message"></div>
-        
         <div class="admin-link">
             <a href="/admin">🛠️ 관리자 페이지</a>
         </div>
@@ -217,11 +210,33 @@
 
     <script>
         let selectedCouponId = null;
+        let updateInterval = null;
+        let currentUserId = null;
         
-        // 페이지 로드 시 쿠폰 목록 가져오기
+        // Toastr 설정
+        toastr.options = {
+            "closeButton": true,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "timeOut": 5000,
+            "extendedTimeOut": 1000
+        };
+        
+        // 페이지 로드 시 쿠폰 목록 가져오기 및 실시간 업데이트 시작
         document.addEventListener('DOMContentLoaded', function() {
             loadCoupons();
+            startRealTimeUpdate();
         });
+        
+        // 실시간 업데이트 시작 (5초마다)
+        function startRealTimeUpdate() {
+            updateInterval = setInterval(() => {
+                if (selectedCouponId && currentUserId) {
+                    loadCoupons();
+                    updateUserCouponStatus();
+                }
+            }, 5000);
+        }
         
         // 활성화된 쿠폰 목록 로드
         async function loadCoupons() {
@@ -237,13 +252,32 @@
                     return;
                 }
                 
-                coupons.forEach(coupon => {
+                for (const coupon of coupons) {
                     const progressPercentage = (coupon.issuedCount / coupon.totalCount) * 100;
                     
                     const couponCard = document.createElement('div');
                     couponCard.className = 'coupon-card';
                     couponCard.dataset.couponId = coupon.id;
                     couponCard.onclick = () => selectCoupon(coupon.id);
+                    
+                    // 사용자별 발급 현황 조회
+                    let userStatusHtml = '';
+                    if (currentUserId) {
+                        try {
+                            const statusResponse = await fetch(`/api/coupons/${coupon.id}/user/${currentUserId}/status`);
+                            if (statusResponse.ok) {
+                                const status = await statusResponse.json();
+                                userStatusHtml = `
+                                    <div class="coupon-limits">
+                                        👤 발급 현황: ${status.issuedCount}/${status.maxPerUser}개 
+                                        ${status.canIssue ? '✅ 발급 가능' : '❌ 발급 불가'}
+                                    </div>
+                                `;
+                            }
+                        } catch (e) {
+                            // 에러 무시 (사용자 ID가 없거나 잘못된 경우)
+                        }
+                    }
                     
                     couponCard.innerHTML = `
                         <div class="coupon-name">${coupon.name}</div>
@@ -254,13 +288,23 @@
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: ${progressPercentage}%"></div>
                         </div>
+                        ${userStatusHtml}
                     `;
                     
                     couponsList.appendChild(couponCard);
-                });
+                }
+                
+                // 선택된 쿠폰 유지
+                if (selectedCouponId) {
+                    const selectedCard = document.querySelector(`[data-coupon-id="${selectedCouponId}"]`);
+                    if (selectedCard) {
+                        selectedCard.classList.add('selected');
+                    }
+                }
+                
             } catch (error) {
                 console.error('쿠폰 목록 로드 실패:', error);
-                showMessage('쿠폰 목록을 불러오는데 실패했습니다.', 'error');
+                toastr.error('쿠폰 목록을 불러오는데 실패했습니다.');
             }
         }
         
@@ -291,15 +335,36 @@
             }
         }
         
-        // 사용자 ID 입력 시 버튼 상태 확인
-        document.getElementById('userId').addEventListener('input', checkButtonState);
+        // 사용자 ID 입력 시 버튼 상태 확인 및 실시간 업데이트
+        document.getElementById('userId').addEventListener('input', function() {
+            currentUserId = this.value;
+            checkButtonState();
+            if (currentUserId) {
+                loadCoupons(); // 사용자별 발급 현황 업데이트
+            }
+        });
+        
+        // 사용자별 쿠폰 발급 현황 업데이트
+        async function updateUserCouponStatus() {
+            if (!currentUserId || !selectedCouponId) return;
+            
+            try {
+                const response = await fetch(`/api/coupons/${selectedCouponId}/user/${currentUserId}/status`);
+                if (response.ok) {
+                    const status = await response.json();
+                    // UI 업데이트는 loadCoupons()에서 처리됨
+                }
+            } catch (error) {
+                console.error('사용자 발급 현황 로드 실패:', error);
+            }
+        }
         
         // 쿠폰 발급
         async function issueCoupon() {
             const userId = document.getElementById('userId').value;
             
             if (!userId || !selectedCouponId) {
-                showMessage('사용자 ID와 쿠폰을 선택해주세요.', 'error');
+                toastr.warning('사용자 ID와 쿠폰을 선택해주세요.');
                 return;
             }
             
@@ -315,18 +380,17 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showMessage(result.message, 'success');
-                    // 쿠폰 목록 새로고침
+                    toastr.success(result.message);
+                    // 즉시 쿠폰 목록 새로고침
                     setTimeout(() => {
                         loadCoupons();
-                        selectedCouponId = null;
                     }, 1000);
                 } else {
-                    showMessage(result.message, 'error');
+                    toastr.error(result.message);
                 }
             } catch (error) {
                 console.error('쿠폰 발급 실패:', error);
-                showMessage('쿠폰 발급 중 오류가 발생했습니다.', 'error');
+                toastr.error('쿠폰 발급 중 오류가 발생했습니다.');
             } finally {
                 issueBtn.disabled = false;
                 issueBtn.textContent = '쿠폰 발급받기';
@@ -334,17 +398,12 @@
             }
         }
         
-        // 메시지 표시
-        function showMessage(text, type) {
-            const messageDiv = document.getElementById('message');
-            messageDiv.textContent = text;
-            messageDiv.className = `message ${type}`;
-            messageDiv.style.display = 'block';
-            
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
-        }
+        // 페이지 언로드 시 인터벌 정리
+        window.addEventListener('beforeunload', function() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        });
     </script>
 </body>
 </html> 

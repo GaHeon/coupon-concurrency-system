@@ -29,6 +29,9 @@ public class Coupon {
     @Column(name = "end_at")
     private LocalDateTime endAt;
     
+    @Column(name = "max_per_user", nullable = false)
+    private Integer maxPerUser = 1; // 1인당 최대 발급 가능 수량 (기본값: 1)
+    
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -44,6 +47,17 @@ public class Coupon {
         this.startAt = startAt;
         this.endAt = endAt;
         this.issuedCount = 0;
+        this.maxPerUser = 1; // 기본값
+    }
+    
+    // 생성자 (maxPerUser 포함)
+    public Coupon(String name, Integer totalCount, LocalDateTime startAt, LocalDateTime endAt, Integer maxPerUser) {
+        this.name = name;
+        this.totalCount = totalCount;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.issuedCount = 0;
+        this.maxPerUser = maxPerUser;
     }
     
     // 쿠폰 발급 가능 여부 확인
@@ -82,4 +96,7 @@ public class Coupon {
     
     public LocalDateTime getEndAt() { return endAt; }
     public void setEndAt(LocalDateTime endAt) { this.endAt = endAt; }
+    
+    public Integer getMaxPerUser() { return maxPerUser; }
+    public void setMaxPerUser(Integer maxPerUser) { this.maxPerUser = maxPerUser; }
 } 

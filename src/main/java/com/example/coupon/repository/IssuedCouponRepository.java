@@ -23,4 +23,8 @@ public interface IssuedCouponRepository extends JpaRepository<IssuedCoupon, Long
     // 특정 쿠폰의 발급 수량 조회
     @Query("SELECT COUNT(ic) FROM IssuedCoupon ic WHERE ic.coupon.id = :couponId")
     Long countByCouponId(@Param("couponId") Long couponId);
+    
+    // 특정 사용자가 특정 쿠폰을 발급받은 수량 조회
+    @Query("SELECT COUNT(ic) FROM IssuedCoupon ic WHERE ic.coupon.id = :couponId AND ic.userId = :userId")
+    Long countByCouponIdAndUserId(@Param("couponId") Long couponId, @Param("userId") Long userId);
 } 

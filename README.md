@@ -4,12 +4,18 @@
 
 ## 📌 주요 특징
 
+### 🔐 핵심 동시성 기능
 - ✅ **Pessimistic Lock을 활용한 동시성 제어**
 - ✅ **유니크 제약조건으로 중복 발급 방지**
 - ✅ **트랜잭션 기반 안전한 데이터 처리**
 - ✅ **Redis 없이도 안전한 동시성 처리**
-- ✅ **실시간 쿠폰 수량 관리**
-- ✅ **직관적인 웹 UI 제공**
+
+### 🎨 사용자 경험 (UX)
+- ✅ **Toast 알림 시스템** - 성공/실패 즉각적 피드백
+- ✅ **실시간 수량 업데이트** - 5초마다 AJAX 자동 갱신
+- ✅ **사용자별 발급 제한** - 1인당 최대 발급 수량 제어
+- ✅ **발급 현황 실시간 표시** - 개인별 발급 가능/불가 상태 UI
+- ✅ **현대적이고 직관적인 웹 UI**
 
 ## 🛠️ 기술 스택
 
@@ -86,20 +92,24 @@ mvn spring-boot:run
 
 ## 🧪 테스트 시나리오
 
-### 기본 기능 테스트
+### 🎨 UX 기능 테스트 (NEW!)
 
-1. **쿠폰 발급 테스트**
-   - 사용자 ID 입력 후 쿠폰 선택
-   - "쿠폰 발급받기" 버튼 클릭
-   - 성공 메시지 확인
+1. **Toast 알림 시스템 테스트**
+   - 사용자 ID 입력 → 쿠폰 선택 → 발급 버튼 클릭
+   - 성공 시 우상단 초록색 Toast 알림 확인
+   - 실패 시 빨간색 Toast 알림 확인
 
-2. **중복 발급 방지 테스트**
-   - 동일 사용자로 같은 쿠폰 재발급 시도
-   - "이미 발급받은 쿠폰입니다" 메시지 확인
+2. **실시간 수량 업데이트 테스트**
+   - 사용자 ID 입력 후 5초마다 자동 갱신 확인
+   - 다른 브라우저/탭에서 발급 후 자동 반영 테스트
+   - 진행률 바 실시간 업데이트 확인
 
-3. **수량 제한 테스트**
-   - 10장 한정 VIP 쿠폰으로 테스트
-   - 11번째 발급 시도 시 실패 확인
+3. **사용자별 발급 제한 테스트**
+   - 동일 사용자로 maxPerUser 초과 발급 시도
+   - "1인당 최대 X개까지만 발급 가능합니다. (현재 Y개 발급됨)" 메시지 확인
+   - 발급 현황 UI 표시: "👤 발급 현황: 1/3개 ✅ 발급 가능"
+
+### 🔐 기본 동시성 테스트
 
 ### 동시성 테스트
 
@@ -130,28 +140,82 @@ Optional<Coupon> findByIdWithLock(@Param("id") Long id);
        uniqueConstraints = @UniqueConstraint(columnNames = {"coupon_id", "user_id"}))
 ```
 
-### 3. 트랜잭션 안전성
+### 3. 사용자별 발급 제한 (NEW!)
 
 ```java
 @Transactional
 public CouponIssueResult issueCoupon(Long couponId, Long userId) {
-    // 원자적 처리 보장
+    // 1. Pessimistic Lock으로 쿠폰 조회
+    Coupon coupon = couponRepository.findByIdWithLock(couponId)
+            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 쿠폰입니다."));
+    
+    // 2. 사용자별 발급 수량 확인 (NEW!)
+    Long userIssuedCount = issuedCouponRepository.countByCouponIdAndUserId(couponId, userId);
+    if (userIssuedCount >= coupon.getMaxPerUser()) {
+        return new CouponIssueResult(false, 
+            String.format("1인당 최대 %d개까지만 발급 가능합니다.", coupon.getMaxPerUser()));
+    }
+    
+    // 3. 원자적 처리 보장
+    coupon.increaseIssuedCount();
+    // ... 발급 처리
 }
+```
+
+### 4. 데이터베이스 설계
+
+```sql
+-- 쿠폰 테이블 (개선됨)
+CREATE TABLE coupon (
+  id BIGINT PRIMARY KEY,
+  name VARCHAR(100),
+  total_count INT,
+  issued_count INT DEFAULT 0,
+  max_per_user INT NOT NULL DEFAULT 1,  -- NEW: 1인당 최대 발급 수량
+  start_at TIMESTAMP,
+  end_at TIMESTAMP
+);
+
+-- 발급 내역 테이블 (수량 기반 제한)
+CREATE TABLE issued_coupon (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  coupon_id BIGINT,
+  user_id BIGINT,
+  issued_at TIMESTAMP
+  -- 수량 기반 제한으로 완전 중복 방지 제약조건은 제거
+);
 ```
 
 ## 📊 API 명세
 
-### 쿠폰 발급
-- **POST** `/api/coupons/{couponId}/issue?userId={userId}`
-- **Response**: `{"success": true, "message": "쿠폰이 성공적으로 발급되었습니다."}`
+### 🎟️ 쿠폰 발급
+```http
+POST /api/coupons/{couponId}/issue?userId={userId}
+Response: {"success": true, "message": "쿠폰이 성공적으로 발급되었습니다! (1/3개 발급됨)"}
+```
 
-### 쿠폰 목록 조회
-- **GET** `/api/coupons` - 전체 쿠폰
-- **GET** `/api/coupons/active` - 활성 쿠폰
+### 📋 쿠폰 목록 조회
+```http
+GET /api/coupons              # 전체 쿠폰
+GET /api/coupons/active       # 활성 쿠폰
+GET /api/coupons/{couponId}   # 특정 쿠폰 조회 (실시간 업데이트용)
+```
 
-### 발급 내역 조회
-- **GET** `/api/coupons/{couponId}/issued` - 특정 쿠폰 발급 내역
-- **GET** `/api/coupons/user/{userId}` - 사용자별 발급 내역
+### 👤 사용자별 발급 현황 (NEW!)
+```http
+GET /api/coupons/{couponId}/user/{userId}/status
+Response: {
+  "issuedCount": 1,
+  "maxPerUser": 3,
+  "canIssue": true
+}
+```
+
+### 📄 발급 내역 조회
+```http
+GET /api/coupons/{couponId}/issued    # 특정 쿠폰 발급 내역
+GET /api/coupons/user/{userId}        # 사용자별 발급 내역
+```
 
 ## 🔍 성능 및 안정성
 
@@ -166,26 +230,59 @@ public CouponIssueResult issueCoupon(Long couponId, Long userId) {
 - 비동기 처리 (이벤트 기반)
 - 마이크로서비스 분리
 
-## 🎨 UI 미리보기
+## 🎨 UI 특징
 
-### 메인 페이지
-- 현대적이고 직관적인 쿠폰 발급 인터페이스
-- 실시간 수량 표시 및 진행률 바
-- 반응형 디자인
+### 🎯 메인 페이지 (대폭 개선!)
+- **🎉 Toast 알림 시스템**: 발급 성공/실패 즉각적 피드백
+- **⚡ 실시간 수량 표시**: 5초마다 AJAX로 자동 갱신
+- **👤 사용자별 발급 현황**: "발급 현황: 1/3개 ✅ 발급 가능" 표시
+- **📊 진행률 바**: 실시간 수량 변화 시각화
+- **📱 반응형 디자인**: 모든 디바이스 대응
 
-### 관리자 페이지
-- 쿠폰 생성/관리 기능
-- 발급 내역 및 통계 대시보드
-- 실시간 데이터 조회
+### 🛠️ 관리자 페이지
+- 탭 기반 네비게이션
+- 실시간 통계 대시보드
+- 쿠폰 생성/관리 기능 (1인당 발급 제한 설정 포함)
+- 발급 내역 상세 조회
+
+### 🚀 기술적 특징
+- **Toastr.js**: 세련된 Toast 알림
+- **AJAX 폴링**: 무중단 실시간 업데이트
+- **jQuery**: 효율적 DOM 조작
+- **CDN 라이브러리**: 빠른 로딩
 
 ## 📈 확장 아이디어
 
+### ✅ 구현 완료된 기능
+- ✅ **Toast 알림 시스템** - 즉각적 사용자 피드백
+- ✅ **실시간 수량 업데이트** - AJAX 폴링 기반 자동 갱신
+- ✅ **사용자별 발급 제한** - 1인당 최대 발급 수량 제어
+- ✅ **발급 현황 UI 표시** - 개인별 발급 가능/불가 상태
+
+### 🚀 향후 확장 계획
 - 📧 발급 성공 알림 (이메일/SMS)
 - ⏰ 스케줄러 기반 만료 쿠폰 정리
 - 📊 고급 통계 및 분석 기능
 - 🔐 사용자 인증 시스템 연동
 - 🎁 쿠폰 사용 처리 기능
+- 💬 WebSocket 실시간 통신 (현재 AJAX 폴링)
+- 🎯 Redis 캐시 레이어 추가
 
 ---
 
-**💡 이 프로젝트는 실무에서 자주 발생하는 동시성 문제를 안전하게 해결하는 방법을 보여주는 포트폴리오용 프로젝트입니다.** 
+## 💡 포트폴리오 어필 포인트
+
+### 🔥 핵심 강점
+1. **실무 문제 해결**: 실제 서비스에서 발생하는 동시성 이슈를 안전하게 처리
+2. **기술적 깊이**: Pessimistic Lock, 트랜잭션, 제약조건 등 백엔드 핵심 기술 활용
+3. **사용자 경험**: Toast 알림, 실시간 업데이트 등 현대적 UX 구현
+4. **완성도**: 백엔드부터 프론트엔드, 테스트까지 완전한 시스템
+5. **확장성**: Redis 없이도 안전한 처리 + 다양한 개선 방향 제시
+
+### 🎯 차별화 포인트
+- **Redis 의존성 없음**: DB 기반만으로 안전한 동시성 처리 구현
+- **실시간 UX**: AJAX 폴링으로 사용자 친화적 인터페이스 제공
+- **비즈니스 로직**: 1인당 발급 제한 등 실제 비즈니스 요구사항 반영
+- **테스트 가능**: 동시성 테스트 스크립트 및 다양한 시나리오 제공
+
+**🚀 이 프로젝트는 동시성 처리가 중요한 쿠폰/예약/좌석 시스템 등의 실무 경험을 보여주는 완성도 높은 포트폴리오입니다!** 
