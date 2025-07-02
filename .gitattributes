@@ -1,0 +1,2 @@
+# HTML 파일은 통계에서 제외
+*.html linguist-vendored
