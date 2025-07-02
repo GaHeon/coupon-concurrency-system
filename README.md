@@ -105,10 +105,10 @@ mvn spring-boot:run
    - 성공 시 우상단 초록색 Toast 알림 확인
    - 실패 시 빨간색 Toast 알림 확인
 
-2. **실시간 수량 업데이트 테스트**
-   - 사용자 ID 입력 후 15초마다 자동 갱신 확인
-   - 다른 브라우저/탭에서 발급 후 자동 반영 테스트
-   - 진행률 바 실시간 업데이트 확인
+2. **UX 개선 테스트** (대폭 업그레이드!)
+   - **Debounce 테스트**: 사용자 ID 입력 시 500ms 후 상태 업데이트 확인
+   - **부분 업데이트 테스트**: 발급 후 선택 상태 유지 + 깜빡임 없음 확인
+   - **스크롤 위치 유지**: 발급 후 선택된 쿠폰으로 부드럽게 스크롤 유지
 
 3. **사용자별 발급 제한 테스트**
    - 동일 사용자로 maxPerUser 초과 발급 시도
@@ -190,7 +190,34 @@ public record IssuedCouponDto(
 List<IssuedCoupon> findByCouponId(@Param("couponId") Long couponId);
 ```
 
-### 5. 데이터베이스 설계
+### 5. UX 혁신적 개선 (NEW!)
+
+```javascript
+// Debounce 패턴으로 불필요한 API 호출 방지
+document.getElementById('userId').addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    if (currentUserId) {
+        debounceTimer = setTimeout(() => {
+            updateAllUserStatus(); // 500ms 후 사용자 상태만 업데이트
+        }, 500);
+    }
+});
+
+// 부분 업데이트로 깜빡임 제거
+async function updateCouponStatus(couponId) {
+    // 전체 재로딩 대신 해당 쿠폰만 갱신
+    card.querySelector('.coupon-info').innerHTML = `...`;
+    card.querySelector('.progress-fill').style.width = `${progress}%`;
+}
+
+// 선택 상태 + 스크롤 위치 완벽 유지
+if (selectedCouponId) {
+    selectedCard.classList.add('selected');
+    selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+```
+
+### 6. 데이터베이스 설계
 
 ```sql
 -- 쿠폰 테이블 (개선됨)
@@ -285,9 +312,11 @@ GET /api/coupons/user/{userId}        # 사용자별 발급 내역
 - **⚡ 성능 최적화**: JOIN FETCH로 N+1 문제 해결
 - **🎨 직관적인 UI**: 탭 기반 네비게이션
 
-### 🚀 기술적 특징
+### 🚀 기술적 특징 (대폭 개선!)
 - **Toastr.js**: 세련된 Toast 알림
-- **AJAX 폴링**: 무중단 실시간 업데이트
+- **Debounce 패턴**: 입력 중 불필요한 API 호출 방지 (500ms)
+- **부분 업데이트**: 전체 재렌더링 없이 변경된 부분만 갱신
+- **스마트 상태 관리**: 선택 상태 + 스크롤 위치 완벽 유지
 - **jQuery**: 효율적 DOM 조작
 - **CDN 라이브러리**: 빠른 로딩
 
@@ -310,7 +339,7 @@ GET /api/coupons/user/{userId}        # 사용자별 발급 내역
 
 ## 🔧 최근 업데이트 (NEW!)
 
-### 📈 2024년 최신 개선사항
+### 📈 최신 개선사항
 
 #### 🐛 **관리자 페이지 발급 내역 문제 해결**
 - **문제**: 500 에러 및 순환 참조로 발급 내역 조회 불가
@@ -333,19 +362,24 @@ GET /api/coupons/user/{userId}        # 사용자별 발급 내역
 - **JOIN FETCH**: LAZY 로딩 문제 해결 및 N+1 쿼리 방지
 - **트랜잭션 최적화**: 데이터 정합성 보장 강화
 
+#### 🎨 **UX 혁신적 개선** (NEW!)
+- **문제**: 사용자 ID 입력 시 계속 깜빡임, 발급 후 선택 풀림
+- **해결**: Debounce + 부분 업데이트 + 선택 상태 유지
+- **결과**: 매끄럽고 직관적인 사용자 경험 완성
+
 ## 💡 포트폴리오 어필 포인트
 
 ### 🔥 핵심 강점
 1. **실무 문제 해결**: 실제 서비스에서 발생하는 동시성 이슈를 안전하게 처리
 2. **기술적 깊이**: Pessimistic Lock, 트랜잭션, 제약조건 등 백엔드 핵심 기술 활용
-3. **사용자 경험**: Toast 알림, 실시간 업데이트 등 현대적 UX 구현
+3. **사용자 경험**: Toast 알림, Debounce + 부분 업데이트로 매끄러운 UX 구현
 4. **완성도**: 백엔드부터 프론트엔드, 테스트까지 완전한 시스템
 5. **확장성**: Redis 없이도 안전한 처리 + 다양한 개선 방향 제시
 
 ### 🎯 차별화 포인트
 - **Redis 의존성 없음**: DB 기반만으로 안전한 동시성 처리 구현
 - **유연한 발급 제한**: 쿠폰별 1인당 발급 수량 개별 설정 가능
-- **실시간 UX**: 스마트 업데이트로 사용자 친화적 인터페이스 제공
+- **혁신적 UX**: Debounce + 부분 업데이트로 깜빡임 없는 매끄러운 인터페이스
 - **비즈니스 로직**: 1인당 발급 제한 등 실제 비즈니스 요구사항 반영
 - **테스트 가능**: 동시성 테스트 스크립트 및 다양한 시나리오 제공
 - **아키텍처 완성도**: DTO 패턴, JOIN FETCH 등 실무 최적화 기법 적용

@@ -230,6 +230,7 @@
     <script>
         let selectedCouponId = null;
         let currentUserId = null;
+        let debounceTimer = null;
         
         // Toastr 설정
         toastr.options = {
@@ -251,13 +252,84 @@
             loadCoupons();
         }
         
-        // 활성화된 쿠폰 목록 로드
+        // 특정 쿠폰 상태만 업데이트 (부분 업데이트)
+        async function updateCouponStatus(couponId) {
+            try {
+                const response = await fetch(`/api/coupons/${couponId}`);
+                const coupon = await response.json();
+                
+                const card = document.querySelector(`[data-coupon-id="${coupon.id}"]`);
+                if (card) {
+                    const progress = (coupon.issuedCount / coupon.totalCount) * 100;
+                    
+                    // 수량 정보만 업데이트
+                    card.querySelector('.coupon-info').innerHTML = `
+                        <span>남은 수량: ${coupon.totalCount - coupon.issuedCount}개</span>
+                        <span>${coupon.issuedCount}/${coupon.totalCount}</span>
+                    `;
+                    card.querySelector('.progress-fill').style.width = `${progress}%`;
+                    
+                    // 사용자별 발급 현황도 업데이트
+                    if (currentUserId) {
+                        updateUserStatus(coupon.id);
+                    }
+                }
+            } catch (error) {
+                console.error('쿠폰 상태 업데이트 실패:', error);
+            }
+        }
+        
+        // 사용자별 발급 현황만 업데이트
+        async function updateUserStatus(couponId) {
+            if (!currentUserId) return;
+            
+            try {
+                const statusResponse = await fetch(`/api/coupons/${couponId}/user/${currentUserId}/status`);
+                if (statusResponse.ok) {
+                    const status = await statusResponse.json();
+                    const card = document.querySelector(`[data-coupon-id="${couponId}"]`);
+                    if (card) {
+                        let limitsDiv = card.querySelector('.coupon-limits');
+                        if (!limitsDiv) {
+                            limitsDiv = document.createElement('div');
+                            limitsDiv.className = 'coupon-limits';
+                            card.appendChild(limitsDiv);
+                        }
+                        limitsDiv.innerHTML = `
+                            👤 발급 현황: ${status.issuedCount}/${status.maxPerUser}개 
+                            ${status.canIssue ? '✅ 발급 가능' : '❌ 발급 불가'}
+                        `;
+                    }
+                }
+            } catch (e) {
+                // 에러 무시
+            }
+        }
+        
+        // 모든 쿠폰의 사용자 상태 업데이트 (debounced)
+        async function updateAllUserStatus() {
+            if (!currentUserId) return;
+            
+            const cards = document.querySelectorAll('.coupon-card');
+            for (const card of cards) {
+                const couponId = card.dataset.couponId;
+                await updateUserStatus(couponId);
+            }
+        }
+        
+        // 활성화된 쿠폰 목록 로드 (전체 재생성)
         async function loadCoupons() {
             try {
                 const response = await fetch('/api/coupons/active');
                 const coupons = await response.json();
                 
                 const couponsList = document.getElementById('coupons-list');
+                
+                // 현재 스크롤 위치 저장
+                const scrollPosition = window.pageYOffset;
+                const selectedCard = document.querySelector('.coupon-card.selected');
+                const selectedCardOffset = selectedCard ? selectedCard.offsetTop : null;
+                
                 couponsList.innerHTML = '';
                 
                 if (coupons.length === 0) {
@@ -307,12 +379,22 @@
                     couponsList.appendChild(couponCard);
                 }
                 
-                // 선택된 쿠폰 유지
+                // 선택된 쿠폰 유지 + 스크롤 위치 복원
                 if (selectedCouponId) {
                     const selectedCard = document.querySelector(`[data-coupon-id="${selectedCouponId}"]`);
                     if (selectedCard) {
                         selectedCard.classList.add('selected');
+                        // 부드럽게 선택된 카드로 스크롤
+                        setTimeout(() => {
+                            selectedCard.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'center' 
+                            });
+                        }, 100);
                     }
+                } else if (selectedCardOffset) {
+                    // 스크롤 위치 복원
+                    window.scrollTo(0, scrollPosition);
                 }
                 
             } catch (error) {
@@ -348,22 +430,24 @@
             }
         }
         
-        // 사용자 ID 입력 시 버튼 상태 확인 및 쿠폰 정보 업데이트
+        // 사용자 ID 입력 시 debounce 적용 🎯
         document.getElementById('userId').addEventListener('input', function() {
             currentUserId = this.value;
             checkButtonState();
+            
+            // 기존 타이머 제거
+            clearTimeout(debounceTimer);
+            
             if (currentUserId) {
-                loadCoupons(); // 사용자별 발급 현황 업데이트
+                // 500ms 후에 사용자 상태만 업데이트 (전체 재로딩 X)
+                debounceTimer = setTimeout(() => {
+                    updateAllUserStatus();
+                }, 500);
+            } else {
+                // 사용자 ID가 없으면 기존 상태 정보 제거
+                document.querySelectorAll('.coupon-limits').forEach(el => el.remove());
             }
         });
-        
-        // 발급 후 자동 새로고침
-        function autoRefreshAfterIssue() {
-            setTimeout(() => {
-                toastr.info('쿠폰 정보를 업데이트합니다.');
-                loadCoupons();
-            }, 1000);
-        }
         
         // 쿠폰 발급
         async function issueCoupon() {
@@ -387,8 +471,8 @@
                 
                 if (result.success) {
                     toastr.success(result.message);
-                    // 발급 성공 후 자동 새로고침
-                    autoRefreshAfterIssue();
+                    // 🎯 전체 재로딩 대신 발급된 쿠폰만 상태 업데이트
+                    updateCouponStatus(selectedCouponId);
                 } else {
                     toastr.error(result.message);
                 }
