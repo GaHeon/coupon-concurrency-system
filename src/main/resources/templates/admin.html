@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>쿠폰 관리자 페이지</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .nav button {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            background: white;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .nav button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .nav button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .section h2 {
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 0.8rem 2rem;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        .table th,
+        .table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .status-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: 2rem;
+        }
+        
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛠️ 쿠폰 관리자 페이지</h1>
+        <p>쿠폰 생성 및 발급 내역 관리</p>
+    </div>
+    
+    <div class="container">
+        <div class="nav">
+            <button class="active" onclick="showSection('overview')">📊 개요</button>
+            <button onclick="showSection('create')">➕ 쿠폰 생성</button>
+            <button onclick="showSection('coupons')">📋 쿠폰 목록</button>
+            <button onclick="showSection('issued')">📄 발급 내역</button>
+        </div>
+        
+        <!-- 개요 섹션 -->
+        <div id="overview" class="section active">
+            <h2>📊 통계 개요</h2>
+            <div class="stats-grid" id="stats-grid">
+                <!-- 통계 카드들이 여기에 동적으로 로드됩니다 -->
+            </div>
+        </div>
+        
+        <!-- 쿠폰 생성 섹션 -->
+        <div id="create" class="section">
+            <h2>➕ 새 쿠폰 생성</h2>
+            <form onsubmit="createCoupon(event)">
+                <div class="form-group">
+                    <label for="couponName">쿠폰 이름</label>
+                    <input type="text" id="couponName" placeholder="예: 신규회원 할인 쿠폰" required>
+                </div>
+                <div class="form-group">
+                    <label for="totalCount">총 발급 수량</label>
+                    <input type="number" id="totalCount" placeholder="100" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="startDate">시작 일시</label>
+                    <input type="datetime-local" id="startDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="endDate">종료 일시</label>
+                    <input type="datetime-local" id="endDate" required>
+                </div>
+                <button type="submit" class="btn">쿠폰 생성</button>
+            </form>
+        </div>
+        
+        <!-- 쿠폰 목록 섹션 -->
+        <div id="coupons" class="section">
+            <h2>📋 전체 쿠폰 목록</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>쿠폰명</th>
+                        <th>총 수량</th>
+                        <th>발급 수량</th>
+                        <th>진행률</th>
+                        <th>상태</th>
+                        <th>시작일</th>
+                        <th>종료일</th>
+                    </tr>
+                </thead>
+                <tbody id="coupons-table-body">
+                    <!-- 쿠폰 목록이 여기에 동적으로 로드됩니다 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 발급 내역 섹션 -->
+        <div id="issued" class="section">
+            <h2>📄 쿠폰 발급 내역</h2>
+            <div class="form-group">
+                <label for="couponSelect">쿠폰 선택</label>
+                <select id="couponSelect" onchange="loadIssuedCoupons()">
+                    <option value="">쿠폰을 선택하세요</option>
+                </select>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>발급 ID</th>
+                        <th>사용자 ID</th>
+                        <th>쿠폰명</th>
+                        <th>발급 일시</th>
+                    </tr>
+                </thead>
+                <tbody id="issued-table-body">
+                    <!-- 발급 내역이 여기에 동적으로 로드됩니다 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="back-link">
+            <a href="/">🏠 메인 페이지로 돌아가기</a>
+        </div>
+    </div>
+
+    <script>
+        let allCoupons = [];
+        
+        // 페이지 로드 시 데이터 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllData();
+            setDefaultDates();
+        });
+        
+        // 모든 데이터 로드
+        async function loadAllData() {
+            await loadCoupons();
+            loadStats();
+            loadCouponSelect();
+        }
+        
+        // 기본 날짜 설정 (현재 시간부터 1주일)
+        function setDefaultDates() {
+            const now = new Date();
+            const oneWeekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            
+            document.getElementById('startDate').value = now.toISOString().slice(0, 16);
+            document.getElementById('endDate').value = oneWeekLater.toISOString().slice(0, 16);
+        }
+        
+        // 섹션 표시
+        function showSection(sectionName) {
+            // 모든 섹션 숨기기
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // 모든 네비게이션 버튼 비활성화
+            document.querySelectorAll('.nav button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 선택된 섹션 및 버튼 활성화
+            document.getElementById(sectionName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // 통계 로드
+        function loadStats() {
+            const totalCoupons = allCoupons.length;
+            const activeCoupons = allCoupons.filter(c => {
+                const now = new Date();
+                return new Date(c.startAt) <= now && new Date(c.endAt) > now;
+            }).length;
+            const totalIssued = allCoupons.reduce((sum, c) => sum + c.issuedCount, 0);
+            const totalCapacity = allCoupons.reduce((sum, c) => sum + c.totalCount, 0);
+            
+            const statsGrid = document.getElementById('stats-grid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalCoupons}</div>
+                    <div class="stat-label">총 쿠폰 수</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${activeCoupons}</div>
+                    <div class="stat-label">활성 쿠폰</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalIssued}</div>
+                    <div class="stat-label">총 발급 수</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalCapacity}</div>
+                    <div class="stat-label">총 발급 가능 수</div>
+                </div>
+            `;
+        }
+        
+        // 쿠폰 목록 로드
+        async function loadCoupons() {
+            try {
+                const response = await fetch('/api/coupons');
+                allCoupons = await response.json();
+                
+                const tableBody = document.getElementById('coupons-table-body');
+                tableBody.innerHTML = '';
+                
+                allCoupons.forEach(coupon => {
+                    const now = new Date();
+                    const isActive = new Date(coupon.startAt) <= now && new Date(coupon.endAt) > now;
+                    const progress = ((coupon.issuedCount / coupon.totalCount) * 100).toFixed(1);
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${coupon.id}</td>
+                        <td>${coupon.name}</td>
+                        <td>${coupon.totalCount}</td>
+                        <td>${coupon.issuedCount}</td>
+                        <td>${progress}%</td>
+                        <td><span class="status-badge ${isActive ? 'status-active' : 'status-expired'}">${isActive ? '활성' : '만료'}</span></td>
+                        <td>${new Date(coupon.startAt).toLocaleString()}</td>
+                        <td>${new Date(coupon.endAt).toLocaleString()}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('쿠폰 목록 로드 실패:', error);
+            }
+        }
+        
+        // 쿠폰 선택 옵션 로드
+        function loadCouponSelect() {
+            const select = document.getElementById('couponSelect');
+            select.innerHTML = '<option value="">쿠폰을 선택하세요</option>';
+            
+            allCoupons.forEach(coupon => {
+                const option = document.createElement('option');
+                option.value = coupon.id;
+                option.textContent = `${coupon.name} (${coupon.issuedCount}/${coupon.totalCount})`;
+                select.appendChild(option);
+            });
+        }
+        
+        // 쿠폰 생성
+        async function createCoupon(event) {
+            event.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('couponName').value,
+                totalCount: parseInt(document.getElementById('totalCount').value),
+                startAt: document.getElementById('startDate').value,
+                endAt: document.getElementById('endDate').value
+            };
+            
+            try {
+                const response = await fetch('/api/coupons', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    alert('쿠폰이 성공적으로 생성되었습니다!');
+                    event.target.reset();
+                    setDefaultDates();
+                    loadAllData();
+                } else {
+                    alert('쿠폰 생성에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('쿠폰 생성 실패:', error);
+                alert('쿠폰 생성 중 오류가 발생했습니다.');
+            }
+        }
+        
+        // 발급 내역 로드
+        async function loadIssuedCoupons() {
+            const couponId = document.getElementById('couponSelect').value;
+            const tableBody = document.getElementById('issued-table-body');
+            
+            if (!couponId) {
+                tableBody.innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/coupons/${couponId}/issued`);
+                const issuedCoupons = await response.json();
+                
+                tableBody.innerHTML = '';
+                
+                issuedCoupons.forEach(issued => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${issued.id}</td>
+                        <td>${issued.userId}</td>
+                        <td>${issued.coupon.name}</td>
+                        <td>${new Date(issued.issuedAt).toLocaleString()}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('발급 내역 로드 실패:', error);
+            }
+        }
+    </script>
+</body>
+</html> 

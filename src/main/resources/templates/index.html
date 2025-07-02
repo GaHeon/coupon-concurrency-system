@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>쿠폰 발급 시스템</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .user-input {
+            margin-bottom: 2rem;
+        }
+        
+        .user-input label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .user-input input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .user-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .coupons-container {
+            margin-bottom: 2rem;
+        }
+        
+        .coupons-container h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        
+        .coupon-card {
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .coupon-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+        }
+        
+        .coupon-card.selected {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+        
+        .coupon-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .coupon-info {
+            display: flex;
+            justify-content: space-between;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .progress-bar {
+            margin-top: 0.8rem;
+            background: #e1e5e9;
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+        
+        .issue-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .issue-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .issue-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .admin-link {
+            text-align: center;
+            margin-top: 2rem;
+        }
+        
+        .admin-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .admin-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎟️ 쿠폰 발급 시스템</h1>
+            <p>선착순 한정 쿠폰을 받아가세요!</p>
+        </div>
+        
+        <div class="user-input">
+            <label for="userId">사용자 ID</label>
+            <input type="number" id="userId" placeholder="사용자 ID를 입력하세요 (예: 1001)" min="1">
+        </div>
+        
+        <div class="coupons-container">
+            <h3>📋 발급 가능한 쿠폰</h3>
+            <div id="coupons-list">
+                <!-- 쿠폰 목록이 여기에 동적으로 로드됩니다 -->
+            </div>
+        </div>
+        
+        <button class="issue-btn" id="issueBtn" onclick="issueCoupon()" disabled>
+            쿠폰 발급받기
+        </button>
+        
+        <div class="message" id="message"></div>
+        
+        <div class="admin-link">
+            <a href="/admin">🛠️ 관리자 페이지</a>
+        </div>
+    </div>
+
+    <script>
+        let selectedCouponId = null;
+        
+        // 페이지 로드 시 쿠폰 목록 가져오기
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCoupons();
+        });
+        
+        // 활성화된 쿠폰 목록 로드
+        async function loadCoupons() {
+            try {
+                const response = await fetch('/api/coupons/active');
+                const coupons = await response.json();
+                
+                const couponsList = document.getElementById('coupons-list');
+                couponsList.innerHTML = '';
+                
+                if (coupons.length === 0) {
+                    couponsList.innerHTML = '<p style="text-align: center; color: #666;">현재 발급 가능한 쿠폰이 없습니다.</p>';
+                    return;
+                }
+                
+                coupons.forEach(coupon => {
+                    const progressPercentage = (coupon.issuedCount / coupon.totalCount) * 100;
+                    
+                    const couponCard = document.createElement('div');
+                    couponCard.className = 'coupon-card';
+                    couponCard.dataset.couponId = coupon.id;
+                    couponCard.onclick = () => selectCoupon(coupon.id);
+                    
+                    couponCard.innerHTML = `
+                        <div class="coupon-name">${coupon.name}</div>
+                        <div class="coupon-info">
+                            <span>남은 수량: ${coupon.totalCount - coupon.issuedCount}개</span>
+                            <span>${coupon.issuedCount}/${coupon.totalCount}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progressPercentage}%"></div>
+                        </div>
+                    `;
+                    
+                    couponsList.appendChild(couponCard);
+                });
+            } catch (error) {
+                console.error('쿠폰 목록 로드 실패:', error);
+                showMessage('쿠폰 목록을 불러오는데 실패했습니다.', 'error');
+            }
+        }
+        
+        // 쿠폰 선택
+        function selectCoupon(couponId) {
+            // 이전 선택 해제
+            document.querySelectorAll('.coupon-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // 새로운 선택 설정
+            document.querySelector(`[data-coupon-id="${couponId}"]`).classList.add('selected');
+            selectedCouponId = couponId;
+            
+            // 버튼 활성화 확인
+            checkButtonState();
+        }
+        
+        // 버튼 활성화 상태 확인
+        function checkButtonState() {
+            const userId = document.getElementById('userId').value;
+            const issueBtn = document.getElementById('issueBtn');
+            
+            if (userId && selectedCouponId) {
+                issueBtn.disabled = false;
+            } else {
+                issueBtn.disabled = true;
+            }
+        }
+        
+        // 사용자 ID 입력 시 버튼 상태 확인
+        document.getElementById('userId').addEventListener('input', checkButtonState);
+        
+        // 쿠폰 발급
+        async function issueCoupon() {
+            const userId = document.getElementById('userId').value;
+            
+            if (!userId || !selectedCouponId) {
+                showMessage('사용자 ID와 쿠폰을 선택해주세요.', 'error');
+                return;
+            }
+            
+            const issueBtn = document.getElementById('issueBtn');
+            issueBtn.disabled = true;
+            issueBtn.textContent = '발급 중...';
+            
+            try {
+                const response = await fetch(`/api/coupons/${selectedCouponId}/issue?userId=${userId}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    // 쿠폰 목록 새로고침
+                    setTimeout(() => {
+                        loadCoupons();
+                        selectedCouponId = null;
+                    }, 1000);
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                console.error('쿠폰 발급 실패:', error);
+                showMessage('쿠폰 발급 중 오류가 발생했습니다.', 'error');
+            } finally {
+                issueBtn.disabled = false;
+                issueBtn.textContent = '쿠폰 발급받기';
+                checkButtonState();
+            }
+        }
+        
+        // 메시지 표시
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html> 
