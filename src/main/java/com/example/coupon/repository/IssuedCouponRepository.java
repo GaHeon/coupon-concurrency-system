@@ -14,8 +14,9 @@ public interface IssuedCouponRepository extends JpaRepository<IssuedCoupon, Long
     // 특정 사용자가 특정 쿠폰을 이미 발급받았는지 확인
     boolean existsByCouponIdAndUserId(Long couponId, Long userId);
     
-    // 특정 쿠폰의 발급 내역 조회
-    List<IssuedCoupon> findByCouponId(Long couponId);
+    // 특정 쿠폰의 발급 내역 조회 (Coupon 정보도 함께 로드)
+    @Query("SELECT ic FROM IssuedCoupon ic JOIN FETCH ic.coupon WHERE ic.coupon.id = :couponId")
+    List<IssuedCoupon> findByCouponId(@Param("couponId") Long couponId);
     
     // 특정 사용자의 발급 내역 조회
     List<IssuedCoupon> findByUserId(Long userId);

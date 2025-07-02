@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/coupons")
@@ -76,9 +77,23 @@ public class CouponController {
      * 특정 쿠폰의 발급 내역 조회 API
      */
     @GetMapping("/{couponId}/issued")
-    public ResponseEntity<List<IssuedCoupon>> getIssuedCoupons(@PathVariable Long couponId) {
+    public ResponseEntity<List<IssuedCouponDto>> getIssuedCoupons(@PathVariable Long couponId) {
         List<IssuedCoupon> issuedCoupons = couponService.getIssuedCoupons(couponId);
-        return ResponseEntity.ok(issuedCoupons);
+        
+        // DTO로 변환하여 반환 (순환 참조 방지)
+        List<IssuedCouponDto> issuedCouponDtos = issuedCoupons.stream()
+                .map(issued -> new IssuedCouponDto(
+                    issued.getId(),
+                    issued.getUserId(),
+                    new CouponSummaryDto(
+                        issued.getCoupon().getId(),
+                        issued.getCoupon().getName()
+                    ),
+                    issued.getIssuedAt()
+                ))
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(issuedCouponDtos);
     }
     
     /**
@@ -123,5 +138,23 @@ public class CouponController {
         LocalDateTime startAt,
         LocalDateTime endAt,
         Integer maxPerUser  // 1인당 최대 발급 가능 수량
+    ) {}
+    
+    /**
+     * 발급된 쿠폰 DTO (순환 참조 방지)
+     */
+    public record IssuedCouponDto(
+        Long id,
+        Long userId,
+        CouponSummaryDto coupon,
+        LocalDateTime issuedAt
+    ) {}
+    
+    /**
+     * 쿠폰 요약 DTO
+     */
+    public record CouponSummaryDto(
+        Long id,
+        String name
     ) {}
 } 

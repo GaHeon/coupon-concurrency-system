@@ -178,6 +178,22 @@
         .admin-link a:hover {
             text-decoration: underline;
         }
+        
+        .refresh-btn {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -193,7 +209,10 @@
         </div>
         
         <div class="coupons-container">
-            <h3>📋 발급 가능한 쿠폰</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📋 발급 가능한 쿠폰</h3>
+                <button class="refresh-btn" onclick="refreshCoupons()">🔄 새로고침</button>
+            </div>
             <div id="coupons-list">
                 <!-- 쿠폰 목록이 여기에 동적으로 로드됩니다 -->
             </div>
@@ -210,7 +229,6 @@
 
     <script>
         let selectedCouponId = null;
-        let updateInterval = null;
         let currentUserId = null;
         
         // Toastr 설정
@@ -222,20 +240,15 @@
             "extendedTimeOut": 1000
         };
         
-        // 페이지 로드 시 쿠폰 목록 가져오기 및 실시간 업데이트 시작
+        // 페이지 로드 시 쿠폰 목록 가져오기
         document.addEventListener('DOMContentLoaded', function() {
             loadCoupons();
-            startRealTimeUpdate();
         });
         
-        // 실시간 업데이트 시작 (5초마다)
-        function startRealTimeUpdate() {
-            updateInterval = setInterval(() => {
-                if (selectedCouponId && currentUserId) {
-                    loadCoupons();
-                    updateUserCouponStatus();
-                }
-            }, 5000);
+        // 수동 새로고침 함수
+        function refreshCoupons() {
+            toastr.info('쿠폰 정보를 새로고침하는 중...');
+            loadCoupons();
         }
         
         // 활성화된 쿠폰 목록 로드
@@ -335,7 +348,7 @@
             }
         }
         
-        // 사용자 ID 입력 시 버튼 상태 확인 및 실시간 업데이트
+        // 사용자 ID 입력 시 버튼 상태 확인 및 쿠폰 정보 업데이트
         document.getElementById('userId').addEventListener('input', function() {
             currentUserId = this.value;
             checkButtonState();
@@ -344,19 +357,12 @@
             }
         });
         
-        // 사용자별 쿠폰 발급 현황 업데이트
-        async function updateUserCouponStatus() {
-            if (!currentUserId || !selectedCouponId) return;
-            
-            try {
-                const response = await fetch(`/api/coupons/${selectedCouponId}/user/${currentUserId}/status`);
-                if (response.ok) {
-                    const status = await response.json();
-                    // UI 업데이트는 loadCoupons()에서 처리됨
-                }
-            } catch (error) {
-                console.error('사용자 발급 현황 로드 실패:', error);
-            }
+        // 발급 후 자동 새로고침
+        function autoRefreshAfterIssue() {
+            setTimeout(() => {
+                toastr.info('쿠폰 정보를 업데이트합니다.');
+                loadCoupons();
+            }, 1000);
         }
         
         // 쿠폰 발급
@@ -381,10 +387,8 @@
                 
                 if (result.success) {
                     toastr.success(result.message);
-                    // 즉시 쿠폰 목록 새로고침
-                    setTimeout(() => {
-                        loadCoupons();
-                    }, 1000);
+                    // 발급 성공 후 자동 새로고침
+                    autoRefreshAfterIssue();
                 } else {
                     toastr.error(result.message);
                 }
@@ -398,10 +402,11 @@
             }
         }
         
-        // 페이지 언로드 시 인터벌 정리
-        window.addEventListener('beforeunload', function() {
-            if (updateInterval) {
-                clearInterval(updateInterval);
+        // 페이지 숨김/보임 감지로 스마트 업데이트 (선택사항)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && currentUserId) {
+                // 페이지가 다시 보일 때 한 번 새로고침
+                loadCoupons();
             }
         });
     </script>
