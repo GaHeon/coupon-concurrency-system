@@ -21,7 +21,7 @@ public CouponIssueResult issueCoupon(Long couponId, Long userId) {
     // 🔒 락 획득으로 동시성 제어
     Coupon coupon = couponRepository.findByIdWithLock(couponId);
     if (coupon.canIssue()) {
-        coupon.increaseIssuedCount(); // ✅ 원자적 처리로 데이터 정합성 보장
+        coupon.increaseIssuedCount(); // 원자적 처리로 데이터 정합성 보장
     }
 }
 ```
@@ -39,7 +39,7 @@ public record IssuedCouponDto(
 // Controller에서 안전한 JSON 직렬화
 public ResponseEntity<List<IssuedCouponDto>> getIssuedCoupons() {
     return issuedCoupons.stream()
-        .map(issued -> new IssuedCouponDto(...)) // ✅ 안전한 변환
+        .map(issued -> new IssuedCouponDto(...)) // 안전한 변환
         .collect(Collectors.toList());
 }
 ```
@@ -79,7 +79,7 @@ if (userIssuedCount >= coupon.getMaxPerUser()) {
 document.getElementById('userId').addEventListener('input', function() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-        updateAllUserStatus(); // 🎯 사용자 상태만 업데이트
+        updateAllUserStatus(); // 사용자 상태만 업데이트
     }, 500);
 });
 
@@ -87,7 +87,7 @@ document.getElementById('userId').addEventListener('input', function() {
 async function updateCouponStatus(couponId) {
     card.querySelector('.coupon-info').innerHTML = newContent;
     card.querySelector('.progress-fill').style.width = `${progress}%`;
-    // ✅ 선택 상태 유지
+    // 선택 상태 유지
 }
 ```
 - **✅ 결과**: 깜빡임 완전 제거, 선택 상태 완벽 유지
@@ -218,10 +218,10 @@ chmod +x test/concurrent_test.sh
 - **확장 가능한 아키텍처** - 캐싱 레이어, 비동기 확장까지 염두에 둔 유연한 구조
 
 ### 📊 **해결한 핵심 문제들**
-- ✅ **동시성 제어**: Race Condition → Pessimistic Lock
-- ✅ **순환 참조**: 500 에러 → DTO 패턴  
-- ✅ **성능 최적화**: N+1 쿼리 → JOIN FETCH
-- ✅ **UX 개선**: 깜빡임 → Debounce + 부분 업데이트
-- ✅ **비즈니스 로직**: DB 제약 → Service 유연성
+- **동시성 제어**: Race Condition → Pessimistic Lock
+- **순환 참조**: 500 에러 → DTO 패턴  
+- **성능 최적화**: N+1 쿼리 → JOIN FETCH
+- **UX 개선**: 깜빡임 → Debounce + 부분 업데이트
+- **비즈니스 로직**: DB 제약 → Service 유연성
 
 **🚀 이 프로젝트는, 단순 기능을 구현이 아닌 “운영 중 어떤 문제가 생기고, 어떻게 대응할 것인가”에 집중한 구조적 설계 사례입니다. 쿠폰/예약/좌석 등 과 같은 환경에서 즉시 활용 가능한 설계로, 응용해서 사용할 수 있는 구조를 갖추고 있습니다.** 
