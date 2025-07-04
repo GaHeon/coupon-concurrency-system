@@ -4,14 +4,20 @@
 
 - [프로젝트 상세 설명](https://www.notion.so/2247f9017bbe80de89b1e92daab8f955?source=copy_link)
 ---
+## 프로젝트 개요
 
-## 🚨 주요 문제 해결 과정
+**쿠폰 발급 시스템**은 선착순 한정 수량 쿠폰을 안정적으로 발급하기 위해 설계된 **문제 해결 중심 웹 애플리케이션**입니다.
+Pessimistic Lock, DTO, JOIN FETCH, Debounce 등을 적용해 **정합성·성능·UX**를 개선하였고, Redis 없이도 안전한 동시성 제어가 가능한 실용적인 구조를 목표로 합니다.
 
-### 🔥 **백엔드 핵심 문제 해결**
+![Coupon System Prototype](docs/DEMO.gif)
+
+## 주요 문제 해결 과정
+
+### **백엔드 핵심 문제 해결**
 
 #### 1️⃣ **동시성 제어 문제**
-- **🚨 문제**: 100명이 동시에 마지막 1개 쿠폰 요청 시 여러 명이 발급받는 Race Condition
-- **💡 해결**: Pessimistic Lock으로 동시 접근 차단
+- **문제**: 100명이 동시에 마지막 1개 쿠폰 요청 시 여러 명이 발급받는 Race Condition
+- **해결**: Pessimistic Lock으로 동시 접근 차단
 ```java
 @Query("SELECT c FROM Coupon c WHERE c.id = :id FOR UPDATE")
 Optional<Coupon> findByIdWithLock(@Param("id") Long id);
@@ -25,11 +31,11 @@ public CouponIssueResult issueCoupon(Long couponId, Long userId) {
     }
 }
 ```
-- **✅ 결과**: 데이터 정합성 100% 보장, Redis 없이도 안전한 처리
+- **결과**: 데이터 정합성 100% 보장, Redis 없이도 안전한 처리
 
 #### 2️⃣ **관리자 페이지 500 에러**
-- **🚨 문제**: 발급 내역 조회 시 순환 참조로 인한 JSON 직렬화 실패
-- **💡 해결**: DTO 패턴으로 순환 참조 완전 차단
+- **문제**: 발급 내역 조회 시 순환 참조로 인한 JSON 직렬화 실패
+- **해결**: DTO 패턴으로 순환 참조 완전 차단
 ```java
 // 순환 참조 방지 DTO
 public record IssuedCouponDto(
@@ -43,20 +49,20 @@ public ResponseEntity<List<IssuedCouponDto>> getIssuedCoupons() {
         .collect(Collectors.toList());
 }
 ```
-- **✅ 결과**: 500 에러 완전 해결, 안정적인 관리자 기능
+- **결과**: 500 에러 완전 해결, 안정적인 관리자 기능
 
 #### 3️⃣ **N+1 쿼리 성능 문제**
-- **🚨 문제**: 발급 내역 100개 조회 시 101번의 쿼리 실행
-- **💡 해결**: JOIN FETCH로 한 번에 로딩
+- **문제**: 발급 내역 100개 조회 시 101번의 쿼리 실행
+- **해결**: JOIN FETCH로 한 번에 로딩
 ```java
 @Query("SELECT ic FROM IssuedCoupon ic JOIN FETCH ic.coupon WHERE ic.coupon.id = :couponId")
 List<IssuedCoupon> findByCouponId(@Param("couponId") Long couponId);
 ```
-- **✅ 결과**: 쿼리 101번 → 1번 (99% 감소), 응답 시간 대폭 개선
+- **결과**: 쿼리 101번 → 1번 (99% 감소), 응답 시간 대폭 개선
 
 #### 4️⃣ **발급 제한 유연성 문제**
-- **🚨 문제**: UniqueConstraint로 1인당 1개만 발급 가능한 제약
-- **💡 해결**: DB 제약조건 제거 + Service 로직으로 유연한 제어
+- **문제**: UniqueConstraint로 1인당 1개만 발급 가능한 제약
+- **해결**: DB 제약조건 제거 + Service 로직으로 유연한 제어
 ```java
 // DB: 제약조건 제거
 @Table(name = "issued_coupon") // UniqueConstraint 제거
@@ -67,13 +73,13 @@ if (userIssuedCount >= coupon.getMaxPerUser()) {
     return new CouponIssueResult(false, "발급 한도 초과");
 }
 ```
-- **✅ 결과**: 쿠폰별 1인당 1~N개까지 유연한 설정 가능
+- **결과**: 쿠폰별 1인당 1~N개까지 유연한 설정 가능
 
-### 🎨 **프론트엔드 UX 문제 해결**
+### **프론트엔드 UX 문제 해결**
 
 #### 1️⃣ **UX 깜빡임 문제**
-- **🚨 문제**: 사용자 ID 입력 시마다 전체 리스트 재렌더링으로 깜빡임 발생
-- **💡 해결**: Debounce 패턴 + 부분 업데이트
+- **문제**: 사용자 ID 입력 시마다 전체 리스트 재렌더링으로 깜빡임 발생
+- **해결**: Debounce 패턴 + 부분 업데이트
 ```javascript
 // 입력 지연 처리 (500ms)
 document.getElementById('userId').addEventListener('input', function() {
@@ -90,16 +96,16 @@ async function updateCouponStatus(couponId) {
     // 선택 상태 유지
 }
 ```
-- **✅ 결과**: 깜빡임 완전 제거, 선택 상태 완벽 유지
+- **결과**: 깜빡임 완전 제거, 선택 상태 완벽 유지
 
 #### 2️⃣ **불필요한 API 호출 문제**
-- **🚨 문제**: 타이핑할 때마다 즉시 서버 요청으로 성능 저하
-- **💡 해결**: 500ms Debounce로 입력 완료 후에만 호출
-- **✅ 결과**: 서버 부하 95% 감소, 사용자 경험 개선
+- **문제**: 타이핑할 때마다 즉시 서버 요청으로 성능 저하
+- **해결**: 500ms Debounce로 입력 완료 후에만 호출
+- **결과**: 서버 부하 95% 감소, 사용자 경험 개선
 
 ---
 
-## 📈 **성과 요약**
+## **성과 요약**
 
 | **문제** | **Before** | **After** | **개선율** |
 |---------|-----------|----------|----------|
@@ -110,7 +116,7 @@ async function updateCouponStatus(couponId) {
 
 ---
 
-## 🛠️ **기술 스택**
+## **기술 스택**
 
 ### Backend
 - **Spring Boot 3.2** - 최신 프레임워크
@@ -131,8 +137,12 @@ async function updateCouponStatus(couponId) {
 
 ---
 
-## 📁 **프로젝트 구조**
-
+## **프로젝트 구조**
+### 시스템 구조
+![시스템구조도](docs/전체구조.png)
+### ERD
+![ERD](docs/ERD.png)
+### Tree
 ```
 coupon_system/
 ├── src/main/java/com/example/coupon/
@@ -164,7 +174,7 @@ coupon_system/
 
 ---
 
-## 🚀 **빠른 실행**
+## **실행 방법**
 
 ### 1. **환경 준비**
 ```bash
@@ -203,25 +213,25 @@ chmod +x test/concurrent_test.sh
 
 ---
 
-## 🏆 **프로젝트 결론**
+## **프로젝트 결론**
 
 > **"단순 구현이 아닌, "이 시스템에선 어떤 문제가 생길까?"를 끊임없이 고민하며 구조부터 해결까지 설계한 문제 해결 중심 프로젝트"**
 
-### 🚀 **문제 해결 역량**
+### **문제 해결 역량**
 - **장애 상황**: 500 에러, 성능 저하, 동시성 문제 등 실제 발생하는 문제 해결
 - **체계적 접근**: 문제 정의 → 원인 분석 → 해결책 도출 → 성능 검증
 - **기술 선택에 근거가 있는 구조**: Pessimistic Lock, DTO 패턴, JOIN FETCH 등을 목적에 맞게 적용
 
-### 🔧 **설계 중심 사고**
+### **설계 중심 사고**
 - **Redis 없이도 안전한 동시성 처리** - 기술 의존성 최소화
 - **전체 흐름을 이해하고 설계할 수 있는 역량** - API부터 UI, DB 설계까지 직접 구현
 - **확장 가능한 아키텍처** - 캐싱 레이어, 비동기 확장까지 염두에 둔 유연한 구조
 
-### 📊 **해결한 핵심 문제들**
+### **해결한 핵심 문제들**
 - **동시성 제어**: Race Condition → Pessimistic Lock
 - **순환 참조**: 500 에러 → DTO 패턴  
 - **성능 최적화**: N+1 쿼리 → JOIN FETCH
 - **UX 개선**: 깜빡임 → Debounce + 부분 업데이트
 - **비즈니스 로직**: DB 제약 → Service 유연성
 
-**🚀 이 프로젝트는, 단순 기능을 구현이 아닌 “운영 중 어떤 문제가 생기고, 어떻게 대응할 것인가”에 집중한 구조적 설계 사례입니다. 쿠폰/예약/좌석 등 과 같은 환경에서 즉시 활용 가능한 설계로, 응용해서 사용할 수 있는 구조를 갖추고 있습니다.** 
+**이 프로젝트는, 단순 기능을 구현이 아닌 “운영 중 어떤 문제가 생기고, 어떻게 대응할 것인가”에 집중한 구조적 설계 사례입니다. 쿠폰/예약/좌석 등 과 같은 환경에서 즉시 활용 가능한 설계로, 응용해서 사용할 수 있는 구조를 갖추고 있습니다.** 
